@@ -1,0 +1,30 @@
+-- schema.sql
+PRAGMA journal_mode=WAL;
+CREATE TABLE IF NOT EXISTS sessions (
+id TEXT PRIMARY KEY,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS messages (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+session_id TEXT NOT NULL,
+role TEXT CHECK(role IN ('user','assistant')) NOT NULL,
+text TEXT NOT NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+FOREIGN KEY(session_id) REFERENCES sessions(id)
+);
+CREATE TABLE IF NOT EXISTS feedback (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+session_id TEXT NOT NULL,
+message_id INTEGER NOT NULL,
+rating INTEGER CHECK(rating IN (1,-1)) NOT NULL, -- 1 thumbs-up, -1 thumbsdown
+note TEXT,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+FOREIGN KEY(session_id) REFERENCES sessions(id),
+FOREIGN KEY(message_id) REFERENCES messages(id)
+);
+CREATE TABLE IF NOT EXISTS faqs (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+question TEXT NOT NULL,
+answer TEXT NOT NULL,
+);
+
