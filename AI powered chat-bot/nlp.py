@@ -17,7 +17,7 @@ def build_prompt(user_query: str, history: List[Tuple[str,str]], retrieved:
 	for _id, q, a, score in retrieved:
 		context_blocks.append(f"Q: {q}\nA: {a}")
 	context_text = "\n\n".join(context_blocks)
-	# Keep short history (last N turns)
+	# Keep short history 
 	trimmed = history[-MAX_TURNS_MEMORY:]
 	hist_text = "\n".join([f"{r.upper()}: {t}" for r, t in trimmed])
 	prompt = (
