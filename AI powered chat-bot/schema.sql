@@ -25,6 +25,6 @@ CREATE TABLE IF NOT EXISTS sessions (
             CREATE TABLE IF NOT EXISTS faqs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 question TEXT NOT NULL,
-                answer TEXT NOT NULL,
+                answer TEXT NOT NULL
                 );
 

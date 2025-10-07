@@ -26,8 +26,8 @@ background: #2d6cdf; color: white; cursor: pointer; }
 <div id="chat" class="chat"></div>
 <div class="row">
 <textarea id="input" rows="2" placeholder="Ask a question..."> 
-    </textarea>
-    <br>
+    </textarea>
+    <br>
 <button id="send">Send</button>
 </div id="Chatbox">
 </div>
@@ -53,8 +53,10 @@ message })});
 const data = await res.json();
 if(!sessionId) { sessionId = data.session_id;
 localStorage.setItem('session_id', sessionId); }
-add('bot', data.answer + `<div class='meta'>mode: ${data.mode}, sim: $
-{data.similarity.toFixed(2)}</div>`);
+// ----------------------------------------------------------------------
+// FIX APPLIED HERE: The template literal now correctly combines the string and the variable: sim: ${data.similarity.toFixed(2)}
+// ----------------------------------------------------------------------
+add('bot', data.answer + `<div class='meta'>mode: ${data.mode}, sim: ${data.similarity.toFixed(2)}</div>`);
 }
 sendBtn.onclick = send;
 input.addEventListener('keydown', (e) => { if(e.key === 'Enter' && !
