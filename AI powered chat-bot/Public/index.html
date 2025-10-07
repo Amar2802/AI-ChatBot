@@ -53,9 +53,6 @@ message })});
 const data = await res.json();
 if(!sessionId) { sessionId = data.session_id;
 localStorage.setItem('session_id', sessionId); }
-// ----------------------------------------------------------------------
-// FIX APPLIED HERE: The template literal now correctly combines the string and the variable: sim: ${data.similarity.toFixed(2)}
-// ----------------------------------------------------------------------
 add('bot', data.answer + `<div class='meta'>mode: ${data.mode}, sim: ${data.similarity.toFixed(2)}</div>`);
 }
 sendBtn.onclick = send;
