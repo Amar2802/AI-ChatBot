@@ -1,7 +1,7 @@
 from pathlib import Path
 # Model IDs (change if you like)
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-GEN_MODEL = "google/flan-t5-base" # small, CPU-friendly
+GEN_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
 # Retrieval settings
 TOP_K = 3
 SIM_THRESHOLD = 0.55 # tune for your data
