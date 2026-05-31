@@ -9,7 +9,7 @@ SIM_THRESHOLD = 0.55 # tune for your data
 MAX_TURNS_MEMORY = 6 # last N user-bot messages kept as context
 # Paths
 BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = BASE_DIR / "Data"
 DB_PATH = BASE_DIR / "chatbot.db"
 FAQ_PATH = DATA_DIR / "faqs.json"
 PUBLIC_DIR = BASE_DIR / "public"

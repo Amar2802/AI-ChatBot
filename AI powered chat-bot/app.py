@@ -9,7 +9,6 @@ from retriever import FAQRetriever
 from nlp import generate_answer, choose_response
 from config import PUBLIC_DIR, MAX_TURNS_MEMORY
 app = FastAPI(title="AI Chatbot")
-app.mount("/", StaticFiles(directory=str(PUBLIC_DIR), html=True),name="static")
 db = DB()
 retriever = FAQRetriever(db)
 class ChatIn(BaseModel):
@@ -79,3 +78,5 @@ def faqs_bulk(inp: BulkFAQIn):
 def logs():
 	rows = db.all_messages()
 	return {"count": len(rows), "messages": rows}
+
+app.mount("/", StaticFiles(directory=str(PUBLIC_DIR), html=True), name="static")
