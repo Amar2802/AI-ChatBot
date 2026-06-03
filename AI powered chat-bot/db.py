@@ -62,11 +62,44 @@ class DB:
         conn.close()
 
     # FAQ ops
+    def faq_count(self) -> int:
+        conn = self._connect()
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM faqs")
+        count = cur.fetchone()[0]
+        conn.close()
+        return count
+
     def insert_faqs(self, pairs: Iterable[Tuple[str, str]]):
         conn = self._connect()
         cur = conn.cursor()
         cur.executemany("INSERT INTO faqs(question, answer) VALUES (?,?)",
                         list(pairs))
+        conn.commit()
+        conn.close()
+
+    def replace_faqs(self, pairs: Iterable[Tuple[str, str]]):
+        conn = self._connect()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM faqs")
+        cur.executemany(
+            "INSERT INTO faqs(question, answer) VALUES (?,?)",
+            list(pairs),
+        )
+        conn.commit()
+        conn.close()
+
+    def dedupe_faqs(self):
+        conn = self._connect()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            DELETE FROM faqs
+            WHERE id NOT IN (
+                SELECT MIN(id) FROM faqs GROUP BY LOWER(TRIM(question))
+            )
+            """
+        )
         conn.commit()
         conn.close()
 

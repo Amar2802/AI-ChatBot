@@ -1,10 +1,12 @@
 from typing import List, Tuple
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
-from config import GEN_MODEL, SIM_THRESHOLD, MAX_TURNS_MEMORY
+from config import GEN_MODEL, SIM_THRESHOLD, FAQ_CONTEXT_MIN, MAX_TURNS_MEMORY
 
 # Load tokenizer and model for CausalLM
 tokenizer = AutoTokenizer.from_pretrained(GEN_MODEL)
+if tokenizer.pad_token_id is None:
+    tokenizer.pad_token_id = tokenizer.eos_token_id
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 if device == "cuda":
@@ -32,8 +34,7 @@ SYSTEM_STYLE = (
 )
 
 def generate_answer(user_query: str, history: List[Tuple[str, str]], retrieved, max_new_tokens: int = 512) -> str:
-    # Filter retrieved FAQ candidates to only keep those with similarity score >= 0.35
-    valid_retrieved = [r for r in retrieved if len(r) >= 4 and r[3] >= 0.35]
+    valid_retrieved = [r for r in retrieved if len(r) >= 4 and r[3] >= FAQ_CONTEXT_MIN]
     
     # Construct System Prompt based on whether we have relevant FAQ context
     if valid_retrieved:
@@ -45,14 +46,14 @@ def generate_answer(user_query: str, history: List[Tuple[str, str]], retrieved, 
             f"{SYSTEM_STYLE}\n\n"
             f"Here is the relevant FAQ Context from our database:\n"
             f"{context_text}\n\n"
-            "Use this context as your primary source of truth if the user's question matches it."
+            "If the user's question matches any FAQ above, answer using that FAQ's answer "
+            "accurately and concisely. Do not invent policies or details that are not in the FAQ."
         )
     else:
         system_prompt = SYSTEM_STYLE
         
-    # Trim and construct conversational message history
-    # Excluding the last user query which will be added explicitly
-    trimmed = history[:-1][-MAX_TURNS_MEMORY:]
+    # Prior turns only (current user message is appended below)
+    trimmed = history[:-1][-(MAX_TURNS_MEMORY * 2):]
     
     messages = [{"role": "system", "content": system_prompt}]
     for role, text in trimmed:
@@ -93,18 +94,23 @@ def generate_answer(user_query: str, history: List[Tuple[str, str]], retrieved, 
 
 def choose_response(user_query: str, retrieved):
     """
-    Heuristic: if top similarity clears the threshold (>= 0.55) and is a specific FAQ query,
-    return its answer directly for zero latency.
-    Otherwise, fall back to the generator with retrieved context as grounding.
+    Return the FAQ answer directly when retrieval is confident enough.
+    Otherwise fall back to the generator with retrieved FAQ context.
     """
     if not retrieved:
         return None, 0.0, "no_hits"
-    
+
     top = retrieved[0]
     _, _q, _a, score = top
-    
-    # If high similarity FAQ match, return directly
+    second_score = retrieved[1][3] if len(retrieved) > 1 else 0.0
+    margin = score - second_score
+
+    # Strong match: return stored FAQ answer verbatim
     if score >= SIM_THRESHOLD:
         return _a, score, "direct"
-        
+
+    # Clear winner over other FAQs (handles paraphrases and short queries)
+    if score >= FAQ_CONTEXT_MIN and margin >= 0.08:
+        return _a, score, "direct"
+
     return None, score, "fallback"

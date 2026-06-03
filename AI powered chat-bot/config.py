@@ -4,7 +4,8 @@ EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 GEN_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
 # Retrieval settings
 TOP_K = 3
-SIM_THRESHOLD = 0.55 # tune for your data
+SIM_THRESHOLD = 0.45  # direct FAQ answer when similarity is this high
+FAQ_CONTEXT_MIN = 0.32  # include FAQ in LLM context above this score
 # Conversation settings
 MAX_TURNS_MEMORY = 6 # last N user-bot messages kept as context
 # Paths
@@ -12,4 +13,4 @@ BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "Data"
 DB_PATH = BASE_DIR / "chatbot.db"
 FAQ_PATH = DATA_DIR / "faqs.json"
-PUBLIC_DIR = BASE_DIR / "public"
+PUBLIC_DIR = BASE_DIR / "Public"

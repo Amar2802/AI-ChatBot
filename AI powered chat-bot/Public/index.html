@@ -538,8 +538,22 @@
           })
         });
 
-        const data = await res.json();
         hideTyping();
+
+        if (!res.ok) {
+          let errText = 'Sorry, the server could not process your question. Please try again.';
+          try {
+            const errData = await res.json();
+            if (errData.detail) {
+              errText = typeof errData.detail === 'string'
+                ? errData.detail
+                : JSON.stringify(errData.detail);
+            }
+          } catch (_) { /* ignore parse errors */ }
+          throw new Error(errText);
+        }
+
+        const data = await res.json();
 
         if (!sessionId && data.session_id) {
           sessionId = data.session_id;
@@ -552,7 +566,8 @@
         console.error('Error sending message:', err);
         const errWrapper = document.createElement('div');
         errWrapper.className = 'msg-wrapper bot-msg';
-        errWrapper.innerHTML = `<div class="msg" style="border-color: #ef4444; color: #f87171;">Sorry, I encountered an error connecting to the server. Please try again.</div>`;
+        const msg = err.message || 'Sorry, I encountered an error connecting to the server. Please try again.';
+        errWrapper.innerHTML = `<div class="msg" style="border-color: #ef4444; color: #f87171;">${escapeHTML(msg)}</div>`;
         chat.appendChild(errWrapper);
         scrollToBottom();
       }

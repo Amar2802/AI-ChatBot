@@ -2,14 +2,27 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+import json
 import uuid
 from typing import Optional
 from db import DB
 from retriever import FAQRetriever
 from nlp import generate_answer, choose_response
-from config import PUBLIC_DIR, MAX_TURNS_MEMORY
+from config import PUBLIC_DIR, MAX_TURNS_MEMORY, FAQ_PATH
 app = FastAPI(title="AI Chatbot")
 db = DB()
+
+
+def _bootstrap_faqs():
+    db.dedupe_faqs()
+    if db.faq_count() == 0 and FAQ_PATH.exists():
+        with open(FAQ_PATH, "r", encoding="utf-8") as f:
+            items = json.load(f)
+        pairs = [(i["question"], i["answer"]) for i in items]
+        db.replace_faqs(pairs)
+
+
+_bootstrap_faqs()
 retriever = FAQRetriever(db)
 class ChatIn(BaseModel):
 	session_id: Optional[str] = None

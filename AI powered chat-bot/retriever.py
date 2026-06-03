@@ -18,7 +18,13 @@ class FAQRetriever:
         self.questions = [r[1] for r in rows]
         self.answers = [r[2] for r in rows]
         if self.questions:
-            self.embeddings = self.model.encode(self.questions, convert_to_numpy=True, normalize_embeddings=True)
+            # Embed question + answer so paraphrases and keyword-style queries match better
+            corpus = [
+                f"{q} {a}" for q, a in zip(self.questions, self.answers)
+            ]
+            self.embeddings = self.model.encode(
+                corpus, convert_to_numpy=True, normalize_embeddings=True
+            )
         else:
             self.embeddings = np.zeros((0, 384), dtype=np.float32)
     
@@ -54,6 +60,18 @@ class FAQRetriever:
                     # Cap boosted similarity to 1.0
                     boosted_sims[i] = min(1.0, boosted_sims[i] + boost)
         
-        # Sort indices by boosted similarity scores
-        idxs = np.argsort(-boosted_sims)[:top_k]
-        return [(self.ids[i], self.questions[i], self.answers[i], float(boosted_sims[i])) for i in idxs]
+        # Sort indices by boosted similarity; skip duplicate questions
+        idxs = np.argsort(-boosted_sims)
+        seen_questions = set()
+        results = []
+        for i in idxs:
+            q_norm = self.questions[i].strip().lower()
+            if q_norm in seen_questions:
+                continue
+            seen_questions.add(q_norm)
+            results.append(
+                (self.ids[i], self.questions[i], self.answers[i], float(boosted_sims[i]))
+            )
+            if len(results) >= top_k:
+                break
+        return results
