@@ -24,6 +24,21 @@ def _bootstrap_faqs():
 
 _bootstrap_faqs()
 retriever = FAQRetriever(db)
+
+from config import USE_LOCAL_LLM, GEMINI_API_KEY, GEN_MODEL
+if GEMINI_API_KEY and not USE_LOCAL_LLM:
+    print("\n" + "="*60)
+    print("🤖 CHATBOT STARTING IN GEMINI API MODE (Fast & Accurate)")
+    print("Model: gemini-2.5-flash")
+    print("="*60 + "\n")
+else:
+    print("\n" + "="*60)
+    print("⚠️ CHATBOT STARTING IN LOCAL CPU MODE (Slow / Fallback)")
+    print(f"Model: {GEN_MODEL}")
+    if not GEMINI_API_KEY:
+        print("Tip: Add GEMINI_API_KEY in your .env file to enable high-speed API generation!")
+    print("="*60 + "\n")
+
 class ChatIn(BaseModel):
 	session_id: Optional[str] = None
 	message: str

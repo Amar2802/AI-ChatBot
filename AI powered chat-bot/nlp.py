@@ -1,25 +1,41 @@
 from typing import List, Tuple
-from transformers import AutoTokenizer, AutoModelForCausalLM
-import torch
-from config import GEN_MODEL, SIM_THRESHOLD, FAQ_CONTEXT_MIN, MAX_TURNS_MEMORY
+from config import (
+    GEN_MODEL,
+    SIM_THRESHOLD,
+    FAQ_CONTEXT_MIN,
+    MAX_TURNS_MEMORY,
+    GEMINI_API_KEY,
+    USE_LOCAL_LLM
+)
 
-# Load tokenizer and model for CausalLM
-tokenizer = AutoTokenizer.from_pretrained(GEN_MODEL)
-if tokenizer.pad_token_id is None:
-    tokenizer.pad_token_id = tokenizer.eos_token_id
-device = "cuda" if torch.cuda.is_available() else "cpu"
+# Lazy loading variables for local model
+_local_tokenizer = None
+_local_model = None
 
-if device == "cuda":
-    model = AutoModelForCausalLM.from_pretrained(
-        GEN_MODEL,
-        torch_dtype=torch.float16,
-        device_map="auto"
-    )
-else:
-    model = AutoModelForCausalLM.from_pretrained(
-        GEN_MODEL,
-        torch_dtype=torch.float32
-    ).to(device)
+def _get_local_model_and_tokenizer():
+    global _local_tokenizer, _local_model
+    if _local_model is None or _local_tokenizer is None:
+        print(f"Loading local model and tokenizer for '{GEN_MODEL}' on CPU/GPU...")
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        import torch
+        
+        _local_tokenizer = AutoTokenizer.from_pretrained(GEN_MODEL)
+        if _local_tokenizer.pad_token_id is None:
+            _local_tokenizer.pad_token_id = _local_tokenizer.eos_token_id
+            
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if device == "cuda":
+            _local_model = AutoModelForCausalLM.from_pretrained(
+                GEN_MODEL,
+                torch_dtype=torch.float16,
+                device_map="auto"
+            )
+        else:
+            _local_model = AutoModelForCausalLM.from_pretrained(
+                GEN_MODEL,
+                torch_dtype=torch.float32
+            ).to(device)
+    return _local_model, _local_tokenizer
 
 SYSTEM_STYLE = (
     "You are a professional, helpful support and general assistant. "
@@ -54,13 +70,63 @@ def generate_answer(user_query: str, history: List[Tuple[str, str]], retrieved, 
         
     # Prior turns only (current user message is appended below)
     trimmed = history[:-1][-(MAX_TURNS_MEMORY * 2):]
-    
-    messages = [{"role": "system", "content": system_prompt}]
-    for role, text in trimmed:
-        messages.append({"role": role, "content": text})
-    messages.append({"role": "user", "content": user_query})
-    
+
+    # If API key is available and USE_LOCAL_LLM is false, use Gemini API
+    if GEMINI_API_KEY and not USE_LOCAL_LLM:
+        try:
+            from google import genai
+            from google.genai import types
+
+            client = genai.Client(api_key=GEMINI_API_KEY)
+            
+            contents = []
+            for role, text in trimmed:
+                gemini_role = "user" if role == "user" else "model"
+                contents.append(
+                    types.Content(
+                        role=gemini_role,
+                        parts=[types.Part.from_text(text=text)]
+                    )
+                )
+            # Append current query
+            contents.append(
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=user_query)]
+                )
+            )
+            
+            config = types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.7,
+                max_output_tokens=max_new_tokens,
+            )
+            
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=contents,
+                config=config,
+            )
+            
+            ans = response.text.strip() if response.text else ""
+            if not ans:
+                return "I'm sorry, I couldn't generate an answer from the API. Please try rephrasing your question."
+            return ans
+
+        except Exception as e:
+            print(f"Error in Gemini API generation: {e}. Falling back to local model if possible...")
+            # Fall through to local model
+
+    # Local LLM fallback
     try:
+        model, tokenizer = _get_local_model_and_tokenizer()
+        import torch
+
+        messages = [{"role": "system", "content": system_prompt}]
+        for role, text in trimmed:
+            messages.append({"role": role, "content": text})
+        messages.append({"role": "user", "content": user_query})
+        
         # Apply the chat template to format conversation into Qwen's expected structure
         prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         inputs = tokenizer(prompt, return_tensors="pt")
@@ -85,12 +151,13 @@ def generate_answer(user_query: str, history: List[Tuple[str, str]], retrieved, 
         
         # Response Validation: handle edge cases where output might be empty or problematic
         if not ans:
-            return "I'm sorry, I couldn't generate an answer. Please try rephrasing your question."
+            return "I'm sorry, I couldn't generate an answer locally. Please try rephrasing your question."
             
         return ans
     except Exception as e:
-        print(f"Error in generate_answer: {e}")
+        print(f"Error in local generate_answer: {e}")
         return "I'm sorry, I encountered an issue processing your request. Please try again or contact support."
+
 
 def choose_response(user_query: str, retrieved):
     """
