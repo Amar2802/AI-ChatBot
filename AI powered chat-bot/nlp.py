@@ -4,6 +4,8 @@ from config import (
     SIM_THRESHOLD,
     FAQ_CONTEXT_MIN,
     MAX_TURNS_MEMORY,
+    OPENAI_API_KEY,
+    OPENAI_MODEL,
     GEMINI_API_KEY,
     USE_LOCAL_LLM
 )
@@ -71,7 +73,33 @@ def generate_answer(user_query: str, history: List[Tuple[str, str]], retrieved, 
     # Prior turns only (current user message is appended below)
     trimmed = history[:-1][-(MAX_TURNS_MEMORY * 2):]
 
-    # If API key is available and USE_LOCAL_LLM is false, use Gemini API
+    # 1. If OpenAI API key is available and USE_LOCAL_LLM is false, use OpenAI API (Primary)
+    if OPENAI_API_KEY and not USE_LOCAL_LLM:
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=OPENAI_API_KEY)
+            
+            messages = [{"role": "system", "content": system_prompt}]
+            for role, text in trimmed:
+                messages.append({"role": role, "content": text})
+            messages.append({"role": "user", "content": user_query})
+            
+            response = client.chat.completions.create(
+                model=OPENAI_MODEL,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=max_new_tokens
+            )
+            ans = response.choices[0].message.content.strip()
+            if not ans:
+                return "I'm sorry, I couldn't generate an answer from the OpenAI API. Please try rephrasing your question."
+            return ans
+
+        except Exception as e:
+            print(f"Error in OpenAI API generation: {e}. Falling back to alternative methods...")
+            # Fall through
+
+    # 2. If Gemini API key is available and USE_LOCAL_LLM is false, use Gemini API (Secondary)
     if GEMINI_API_KEY and not USE_LOCAL_LLM:
         try:
             from google import genai
@@ -110,14 +138,14 @@ def generate_answer(user_query: str, history: List[Tuple[str, str]], retrieved, 
             
             ans = response.text.strip() if response.text else ""
             if not ans:
-                return "I'm sorry, I couldn't generate an answer from the API. Please try rephrasing your question."
+                return "I'm sorry, I couldn't generate an answer from the Gemini API. Please try rephrasing your question."
             return ans
 
         except Exception as e:
             print(f"Error in Gemini API generation: {e}. Falling back to local model if possible...")
             # Fall through to local model
 
-    # Local LLM fallback
+    # 3. Local LLM fallback
     try:
         model, tokenizer = _get_local_model_and_tokenizer()
         import torch
@@ -157,6 +185,7 @@ def generate_answer(user_query: str, history: List[Tuple[str, str]], retrieved, 
     except Exception as e:
         print(f"Error in local generate_answer: {e}")
         return "I'm sorry, I encountered an issue processing your request. Please try again or contact support."
+
 
 
 def choose_response(user_query: str, retrieved):
