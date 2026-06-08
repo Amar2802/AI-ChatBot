@@ -3,10 +3,23 @@ import { marked } from 'marked';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/tokyo-night-dark.css';
 
-// Custom renderer for marked to open links in new tabs
+// Custom renderer for marked to open links in new tabs and inject copy code buttons
 const renderer = new marked.Renderer();
 renderer.link = (href, title, text) => {
   return `<a href="${href}" title="${title || ''}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+};
+renderer.code = ({ text, lang }) => {
+  const language = lang || 'plaintext';
+  const cleanCode = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return `
+    <div class="code-block-container">
+      <div class="code-block-header">
+        <span class="code-block-lang">${language}</span>
+        <button class="copy-code-btn" data-code="${encodeURIComponent(text)}">Copy</button>
+      </div>
+      <pre><code class="hljs language-${language}">${cleanCode}</code></pre>
+    </div>
+  `;
 };
 marked.setOptions({ renderer });
 
@@ -19,17 +32,49 @@ function App() {
   const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = useRef(null);
 
+  const suggestions = [
+    { text: "What are your support hours?", label: "Support Hours" },
+    { text: "How can I reset my password?", label: "Reset Password" },
+    { text: "Do you offer refunds?", label: "Refund Policy" },
+    { text: "Write a python function to check if a number is prime", label: "Python Coding" }
+  ];
+
   // Auto-scroll to bottom
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  const handleSend = async (e) => {
-    if (e) e.preventDefault();
-    const query = input.trim();
+  // Global listener for dynamic Copy Code buttons
+  useEffect(() => {
+    const handleCopyClick = (e) => {
+      if (e.target && e.target.classList.contains('copy-code-btn')) {
+        const encodedCode = e.target.getAttribute('data-code');
+        if (encodedCode) {
+          const codeText = decodeURIComponent(encodedCode);
+          navigator.clipboard.writeText(codeText).then(() => {
+            const originalText = e.target.innerText;
+            e.target.innerText = 'Copied!';
+            e.target.classList.add('copied');
+            setTimeout(() => {
+              e.target.innerText = originalText;
+              e.target.classList.remove('copied');
+            }, 2000);
+          }).catch(err => {
+            console.error('Failed to copy code:', err);
+          });
+        }
+      }
+    };
+
+    document.addEventListener('click', handleCopyClick);
+    return () => {
+      document.removeEventListener('click', handleCopyClick);
+    };
+  }, []);
+
+  const sendMessage = async (query) => {
     if (!query || isTyping) return;
 
-    setInput('');
     setIsTyping(true);
 
     // Append user message
@@ -138,6 +183,14 @@ function App() {
     }
   };
 
+  const handleSend = (e) => {
+    if (e) e.preventDefault();
+    const query = input.trim();
+    if (!query) return;
+    setInput('');
+    sendMessage(query);
+  };
+
   const handleFeedback = async (messageId, rating, index) => {
     const msg = messages[index];
     if (msg.hasVoted) return;
@@ -230,6 +283,22 @@ function App() {
               )}
             </div>
           ))}
+
+          {/* Quick Suggestions grid when no conversation started yet */}
+          {messages.length === 1 && !isTyping && (
+            <div className="suggestions-grid">
+              {suggestions.map((s, idx) => (
+                <button
+                  key={idx}
+                  className="suggestion-card"
+                  onClick={() => sendMessage(s.text)}
+                >
+                  <span className="suggestion-label">{s.label}</span>
+                  <span className="suggestion-text">"{s.text}"</span>
+                </button>
+              ))}
+            </div>
+          )}
 
           {isTyping && (
             <div className="typing-indicator">
