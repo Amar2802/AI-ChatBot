@@ -4,6 +4,8 @@ from app.core.config import settings
 # Lazy loading variables for local model
 _local_tokenizer = None
 _local_model = None
+_openai_failed = False
+_gemini_failed = False
 
 def _get_local_model_and_tokenizer():
     global _local_tokenizer, _local_model
@@ -12,6 +14,10 @@ def _get_local_model_and_tokenizer():
         from transformers import AutoTokenizer, AutoModelForCausalLM
         import torch
         
+        # Optimize CPU threads for PyTorch to avoid thread thrashing/high CPU wait times
+        if torch.get_num_threads() > 4:
+            torch.set_num_threads(4)
+            
         _local_tokenizer = AutoTokenizer.from_pretrained(settings.LOCAL_GEN_MODEL)
         if _local_tokenizer.pad_token_id is None:
             _local_tokenizer.pad_token_id = _local_tokenizer.eos_token_id
@@ -32,6 +38,7 @@ def _get_local_model_and_tokenizer():
 
 SYSTEM_STYLE = (
     "You are a professional, helpful support and general assistant. "
+    "Respond in a clear, extremely concise manner. Keep explanations brief and direct unless detailed code is requested. "
     "Use the provided FAQ context (if any) to answer questions factually and contextually. "
     "If the context matches the user's question, base your response directly on it. "
     "If the query is a greeting or chit-chat, reply warmly and professionally. "
@@ -68,6 +75,7 @@ def generate_answer_stream(user_query: str, history: List[Tuple[str, str]], retr
     """
     Generates LLM text stream using OpenAI, Gemini, or local models.
     """
+    global _openai_failed, _gemini_failed
     tokens_limit = max_new_tokens or settings.MAX_NEW_TOKENS
     valid_retrieved = [r for r in retrieved if len(r) >= 4 and r[3] >= settings.FAQ_CONTEXT_MIN]
     
@@ -91,7 +99,7 @@ def generate_answer_stream(user_query: str, history: List[Tuple[str, str]], retr
     trimmed = history[:-1][-(settings.MAX_TURNS_MEMORY * 2):]
 
     # 1. If OpenAI API key is available, use OpenAI API
-    if settings.OPENAI_API_KEY and not settings.USE_LOCAL_LLM:
+    if settings.OPENAI_API_KEY and not settings.USE_LOCAL_LLM and not _openai_failed:
         try:
             from openai import OpenAI
             client = OpenAI(api_key=settings.OPENAI_API_KEY)
@@ -116,10 +124,11 @@ def generate_answer_stream(user_query: str, history: List[Tuple[str, str]], retr
             return
 
         except Exception as e:
-            print(f"Error in OpenAI API generation: {e}. Falling back to alternative methods...")
+            print(f"Error in OpenAI API generation: {e}. Disabling OpenAI API fallback.")
+            _openai_failed = True
 
     # 2. If Gemini API key is available, use Gemini API
-    if settings.GEMINI_API_KEY and not settings.USE_LOCAL_LLM:
+    if settings.GEMINI_API_KEY and not settings.USE_LOCAL_LLM and not _gemini_failed:
         try:
             from google import genai
             from google.genai import types
@@ -159,7 +168,8 @@ def generate_answer_stream(user_query: str, history: List[Tuple[str, str]], retr
             return
 
         except Exception as e:
-            print(f"Error in Gemini API generation: {e}. Falling back to local model if possible...")
+            print(f"Error in Gemini API generation: {e}. Disabling Gemini API fallback.")
+            _gemini_failed = True
 
     # 3. Local LLM fallback
     try:
@@ -167,6 +177,10 @@ def generate_answer_stream(user_query: str, history: List[Tuple[str, str]], retr
         from transformers import TextIteratorStreamer
         from threading import Thread
         import torch
+
+        # Ensure threads are set correctly before execution starts
+        if torch.get_num_threads() > 4:
+            torch.set_num_threads(4)
 
         messages = [{"role": "system", "content": system_prompt}]
         for role, text in trimmed:
@@ -180,14 +194,13 @@ def generate_answer_stream(user_query: str, history: List[Tuple[str, str]], retr
         
         streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
         
+        # Greedy decoding (do_sample=False) is significantly faster on CPU
         generation_kwargs = dict(
             input_ids=input_ids,
             attention_mask=attention_mask,
             streamer=streamer,
             max_new_tokens=tokens_limit,
-            temperature=0.7,
-            top_p=0.9,
-            do_sample=True,
+            do_sample=False,
             pad_token_id=tokenizer.eos_token_id
         )
         
