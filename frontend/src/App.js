@@ -34,9 +34,9 @@ function App() {
 
   const suggestions = [
     { text: "What are your support hours?", label: "Support Hours" },
-    { text: "How can I reset my password?", label: "Reset Password" },
-    { text: "Do you offer refunds?", label: "Refund Policy" },
-    { text: "Write a python function to check if a number is prime", label: "Python Coding" }
+    { text: "How can I reset my password?", label: "Account Help" },
+    { text: "What are your capabilities and how can you help?", label: "Bot Capabilities" },
+    { text: "Can I connect with a human support agent?", label: "Human Support" }
   ];
 
   // Auto-scroll to bottom
