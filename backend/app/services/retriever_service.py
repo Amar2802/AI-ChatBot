@@ -4,8 +4,13 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 from sqlalchemy.orm import Session
+import torch
 from app.core.config import settings
 from app.services import chat_service
+
+# Optimize PyTorch CPU thread count to prevent thread thrashing during sentence encoding
+if torch.get_num_threads() > 4:
+    torch.set_num_threads(4)
 
 class FAQRetrieverService:
     def __init__(self):

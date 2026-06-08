@@ -22,11 +22,11 @@ class Settings(BaseSettings):
     USE_LOCAL_LLM: Optional[bool] = None
 
     # Algorithm settings
-    TOP_K: int = 3
+    TOP_K: int = 2
     SIM_THRESHOLD: float = 0.65
     FAQ_CONTEXT_MIN: float = 0.40
-    MAX_TURNS_MEMORY: int = 6
-    MAX_NEW_TOKENS: int = 256
+    MAX_TURNS_MEMORY: int = 3
+    MAX_NEW_TOKENS: int = 150
 
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).resolve().parent.parent.parent / ".env"),
