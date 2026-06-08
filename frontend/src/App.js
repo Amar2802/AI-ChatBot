@@ -5,7 +5,7 @@ import 'highlight.js/styles/tokyo-night-dark.css';
 
 // Custom renderer for marked to open links in new tabs and inject copy code buttons
 const renderer = new marked.Renderer();
-renderer.link = (href, title, text) => {
+renderer.link = ({ href, title, text }) => {
   return `<a href="${href}" title="${title || ''}" target="_blank" rel="noopener noreferrer">${text}</a>`;
 };
 renderer.code = ({ text, lang }) => {
