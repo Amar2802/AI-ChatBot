@@ -252,15 +252,6 @@ function App() {
               
               {msg.role === 'assistant' && msg.id !== 'welcome' && (
                 <>
-                  {msg.mode && (
-                    <div className="meta-badge">
-                      <span>mode: {msg.mode}</span>
-                      {msg.similarity !== null && msg.similarity > 0 && (
-                        <span>sim: {msg.similarity.toFixed(2)}</span>
-                      )}
-                    </div>
-                  )}
-
                   {msg.done && msg.message_id && (
                     <div className="feedback-actions">
                       <button

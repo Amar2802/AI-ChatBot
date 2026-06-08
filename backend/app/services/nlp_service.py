@@ -171,48 +171,52 @@ def generate_answer_stream(user_query: str, history: List[Tuple[str, str]], retr
             print(f"Error in Gemini API generation: {e}. Disabling Gemini API fallback.")
             _gemini_failed = True
 
-    # 3. Local LLM fallback
-    try:
-        model, tokenizer = _get_local_model_and_tokenizer()
-        from transformers import TextIteratorStreamer
-        from threading import Thread
-        import torch
+    # 3. Local LLM fallback (only run if settings.USE_LOCAL_LLM is explicitly enabled)
+    if settings.USE_LOCAL_LLM:
+        try:
+            model, tokenizer = _get_local_model_and_tokenizer()
+            from transformers import TextIteratorStreamer
+            from threading import Thread
+            import torch
 
-        # Ensure threads are set correctly before execution starts
-        if torch.get_num_threads() > 4:
-            torch.set_num_threads(4)
+            # Ensure threads are set correctly before execution starts
+            if torch.get_num_threads() > 4:
+                torch.set_num_threads(4)
 
-        messages = [{"role": "system", "content": system_prompt}]
-        for role, text in trimmed:
-            messages.append({"role": role, "content": text})
-        messages.append({"role": "user", "content": user_query})
-        
-        prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        inputs = tokenizer(prompt, return_tensors="pt")
-        input_ids = inputs.input_ids.to(model.device)
-        attention_mask = inputs.attention_mask.to(model.device)
-        
-        streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
-        
-        # Greedy decoding (do_sample=False) is significantly faster on CPU
-        generation_kwargs = dict(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            streamer=streamer,
-            max_new_tokens=tokens_limit,
-            do_sample=False,
-            pad_token_id=tokenizer.eos_token_id
-        )
-        
-        thread = Thread(target=model.generate, kwargs=generation_kwargs)
-        thread.start()
-        
-        for new_text in streamer:
-            yield new_text
+            messages = [{"role": "system", "content": system_prompt}]
+            for role, text in trimmed:
+                messages.append({"role": role, "content": text})
+            messages.append({"role": "user", "content": user_query})
             
-    except Exception as e:
-        print(f"Error in local generate_answer: {e}")
-        yield "I'm sorry, I encountered an issue processing your request. Please try again or contact support."
+            prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            inputs = tokenizer(prompt, return_tensors="pt")
+            input_ids = inputs.input_ids.to(model.device)
+            attention_mask = inputs.attention_mask.to(model.device)
+            
+            streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
+            
+            # Greedy decoding (do_sample=False) is significantly faster on CPU
+            generation_kwargs = dict(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                streamer=streamer,
+                max_new_tokens=tokens_limit,
+                do_sample=False,
+                pad_token_id=tokenizer.eos_token_id
+            )
+            
+            thread = Thread(target=model.generate, kwargs=generation_kwargs)
+            thread.start()
+            
+            for new_text in streamer:
+                yield new_text
+                
+        except Exception as e:
+            print(f"Error in local generate_answer: {e}")
+            yield "I'm sorry, I encountered an issue processing your request. Please try again or contact support."
+    else:
+        # Instant direct fallback response if API is disabled/failed, avoiding slow CPU model loading latency
+        yield "I'm sorry, I couldn't find an answer to your question in our FAQs. Please contact our support team at support@example.com for further assistance."
 
 def generate_answer(user_query: str, history: List[Tuple[str, str]], retrieved, max_new_tokens: int = None) -> str:
     """
