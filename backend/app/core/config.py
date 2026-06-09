@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     # Models configuration
     EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
-    LOCAL_GEN_MODEL: str = "Qwen/Qwen2.5-0.5B-Instruct"
+    LOCAL_GEN_MODEL: str = "Qwen/Qwen2.5-1.5B-Instruct"
 
     # API Keys & Flags
     OPENAI_API_KEY: Optional[str] = None
