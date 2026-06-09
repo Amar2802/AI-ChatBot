@@ -22,6 +22,13 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
         
+    # Pre-load local LLM model if enabled to avoid first-request latency
+    if settings.USE_LOCAL_LLM:
+        from app.services.nlp_service import _get_local_model_and_tokenizer
+        print("Pre-loading local LLM model...")
+        _get_local_model_and_tokenizer()
+        print("Local LLM model pre-loaded successfully.")
+        
     yield
     # Shutdown tasks (none needed)
 
